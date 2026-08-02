@@ -50,4 +50,4 @@ uvicorn app:app --port 8000 --reload       # :8000
 ```
 
 Login: `a.wibowo@rsudhs.go.id` / `password12`.
-Detail: [docs/CARA_JALANKAN.md](docs/CARA_JALANKAN.md) · alur & status: [docs/USECASE.md](docs/USECASE.md).
+Masukin model kamu: [docs/PANDUAN_MODEL.md](docs/PANDUAN_MODEL.md). Detail: [docs/CARA_JALANKAN.md](docs/CARA_JALANKAN.md) · alur & status: [docs/USECASE.md](docs/USECASE.md).
