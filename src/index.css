@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* focus-visible ring for keyboard nav (WCAG) */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
