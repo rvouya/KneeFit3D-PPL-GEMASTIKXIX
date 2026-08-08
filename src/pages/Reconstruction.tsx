@@ -48,6 +48,7 @@ export function Reconstruction() {
   const files = c?.files ?? [];
   const nifti = files.filter((f) => f.kind === 'nifti');
   const stl = files.filter((f) => f.kind === 'stl');
+  const [femurUrl, tibiaUrl] = stl.map((f) => f.url);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-50">
@@ -55,7 +56,7 @@ export function Reconstruction() {
 
       <div className="flex min-h-0 flex-1 gap-4 bg-[#f9fafb] p-4">
         <section className="relative min-w-0 flex-1 overflow-hidden rounded-card bg-[#8ba0c8] shadow-card">
-          <KneeScene />
+          <KneeScene femurUrl={femurUrl} tibiaUrl={tibiaUrl} side={c?.side ?? 'Kanan'} />
 
           <div className="pointer-events-none absolute inset-0 font-mono text-sm font-semibold text-white/70">
             <span className="absolute left-1/2 top-6 -translate-x-1/2">S</span>

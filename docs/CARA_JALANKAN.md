@@ -1,50 +1,65 @@
 # Cara Menjalankan KneeFit3D
 
+Aplikasi berjalan **standalone**: tidak ada backend, tidak ada database yang
+perlu diinstal. Semua data tersimpan di browser (IndexedDB).
+
 ## Prasyarat
-- Node.js (sudah ada)
-- PostgreSQL lokal (perlu diinstal)
+- Node.js
 
-## 1. Install PostgreSQL (Windows)
-Pilih salah satu — jalankan di prompt Claude Code dengan awalan `!` atau di PowerShell admin:
-
+## 1. Install dependensi
 ```
-! choco install postgresql
-```
-atau unduh installer: https://www.postgresql.org/download/windows/
-
-Catat user & password superuser (default installer: user `postgres`).
-
-## 2. Buat database
-```
-! psql -U postgres -c "CREATE DATABASE kneefit3d;"
+npm install
 ```
 
-## 3. Set koneksi
-Edit `server/.env` bila user/password berbeda dari default:
+## 2. Mode pengembangan
 ```
-DATABASE_URL=postgresql://postgres:PASSWORD@localhost:5432/kneefit3d
-PORT=4000
+npm run dev
+```
+Buka http://localhost:5173
+
+## 3. Build untuk dibagikan
+```
+npm run build
+npm run preview        # cek hasil build di http://localhost:4173
 ```
 
-## 4. Buat tabel + seed data
-```
-npm run db:setup
-```
-Output sukses: `✓ setup complete. Login: a.wibowo@rsudhs.go.id / password12`
+Isi folder `dist/` adalah situs statis lengkap (termasuk `dist/models/`, ±19 MB).
+Unggah folder itu ke hosting statis mana pun — Netlify, Vercel, GitHub Pages,
+Cloudflare Pages — tanpa konfigurasi tambahan.
 
-## 5. Jalankan web + API bersamaan
-```
-npm run dev:all
-```
-- Web  : http://localhost:5173
-- API  : http://localhost:4000/api/health
-
-Atau dua terminal terpisah: `npm run server` dan `npm run dev`.
+> Harus diakses lewat HTTP, bukan dobel-klik `dist/index.html`: browser menolak
+> memuat ES module dari `file://`. Cukup `npx serve dist` atau `npm run preview`
+> di komputer mana pun.
 
 ## Login
 `a.wibowo@rsudhs.go.id` / `password12`
 
+Akun ini konstanta di `src/data/registry.ts`. Tanpa server, kata sandi dicocokkan
+di browser — ini gerbang demo, bukan kontrol keamanan.
+
+## Data
+
+Kasus tersimpan di IndexedDB `kneefit3d` pada browser yang dipakai. Artinya:
+
+- Ganti browser / komputer ⇒ data tidak ikut.
+- Bersihkan data situs ⇒ semua kasus hilang.
+- Saat pertama dibuka, satu kasus contoh (`KF-2419-0092`) dibuat otomatis.
+
+Cadangan tersedia lewat `api.exportBackup()`, `api.importBackup(json)`, dan
+`api.resetAll()` di `src/lib/api.ts` (belum ada tombolnya di UI).
+
 ## Struktur
-- `src/` — frontend React (Vite + Tailwind)
-- `server/` — API Express + PostgreSQL (`schema.sql`, seed di `src/scripts/setup.ts`)
-- `USECASE.md` — alur, state machine status, kondisi tombol
+- `src/` — frontend React (Vite + Tailwind + react-three-fiber)
+- `src/lib/db.ts` — penyimpanan IndexedDB (pengganti PostgreSQL + Express)
+- `src/lib/pipeline.ts` — keluaran pipeline ML (stub deterministik)
+- `src/data/registry.ts` — registry pasien + akun demo
+- `public/models/` — mesh STL & GLB
+- `docs/USECASE.md` — alur, state machine status, kondisi tombol
+
+## Backend
+
+`server/` (Express + PostgreSQL) dan `ml/` (FastAPI) masih ada di disk tapi
+di-gitignore dan tidak dipakai mode standalone. Versi terakhir yang ter-commit
+ada di commit `2415914`. Untuk menghidupkannya lagi: kembalikan skrip npm-nya,
+ubah `src/lib/api.ts` agar memanggil `fetch('/api/...')`, dan aktifkan kembali
+`server.proxy` di `vite.config.ts`.

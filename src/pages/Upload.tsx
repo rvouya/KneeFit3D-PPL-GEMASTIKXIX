@@ -1,12 +1,25 @@
 import { useNavigate } from 'react-router-dom';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { AppHeader } from '../components/AppHeader';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
 
-const ACCEPT = '.dcm,.png';
-const okExt = (name: string) => /\.(dcm|png)$/i.test(name);
+const ACCEPT = '.dcm,.png,.jpg,.jpeg';
+const okExt = (name: string) => /\.(dcm|png|jpe?g)$/i.test(name);
+
+/** DICOM tidak bisa dirender <img>, jadi hanya PNG/JPEG yang dijadikan data URL. */
+const renderable = (f: File) => /\.(png|jpe?g)$/i.test(f.name);
+
+function toDataUrl(f: File): Promise<string | null> {
+  if (!renderable(f)) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(typeof r.result === 'string' ? r.result : null);
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(f);
+  });
+}
 
 function humanSize(bytes: number) {
   if (bytes > 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
@@ -25,6 +38,15 @@ function Slot({
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  // object URL pratinjau dilepas saat berkas berganti agar tidak bocor
+  useEffect(() => {
+    if (!file || !renderable(file)) return setPreview(null);
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   function pick(f: File | undefined | null) {
     if (!f) return;
@@ -66,12 +88,21 @@ function Slot({
         />
         {file ? (
           <div className="flex flex-col items-center gap-2 px-6 text-center">
-            <div className="grid h-28 w-24 place-items-center rounded-lg bg-ink-200 text-[11px] text-ink-500">
-              x-ray {label === 'AP' ? 'AP' : 'lateral'} preview
-            </div>
+            {preview ? (
+              <img
+                src={preview}
+                alt={`Pratinjau X-ray ${label}`}
+                className="h-28 w-24 rounded-lg border border-ink-200 object-cover"
+              />
+            ) : (
+              <div className="grid h-28 w-24 place-items-center rounded-lg bg-ink-200 text-[11px] text-ink-500">
+                DICOM · tanpa pratinjau
+              </div>
+            )}
             <div className="font-mono text-sm font-semibold text-ink-800">{file.name}</div>
             <div className="text-xs text-ink-500">
-              {/\.dcm$/i.test(file.name) ? 'DICOM' : 'PNG'} · {humanSize(file.size)}
+              {/\.dcm$/i.test(file.name) ? 'DICOM' : /\.png$/i.test(file.name) ? 'PNG' : 'JPEG'} ·{' '}
+              {humanSize(file.size)}
             </div>
             <span className="rounded-full bg-good/10 px-2 py-0.5 text-[11px] font-medium text-good">✓ valid</span>
           </div>
@@ -94,32 +125,50 @@ function Slot({
   );
 }
 
-/** Halaman unggah citra X-ray + metadata kasus. */
+/** Umur penuh tahun dari tanggal lahir ISO; null bila tanggal tidak masuk akal. */
+function ageFrom(iso: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const b = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(b.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) years -= 1;
+  return years > 0 && years < 130 ? years : null;
+}
+
+/** Halaman unggah citra X-ray + identitas pasien. */
 export function Upload() {
   const navigate = useNavigate();
   const [ap, setAp] = useState<File | null>(null);
   const [lat, setLat] = useState<File | null>(null);
   const [nik, setNik] = useState('');
   const [fullName, setFullName] = useState('');
-  const [age, setAge] = useState('68');
+  const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<'P' | 'L'>('P');
   const [side, setSide] = useState<'Kanan' | 'Kiri'>('Kanan');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = !!ap && !!lat && !!nik.trim() && !!fullName.trim() && Number(age) > 0;
+  const age = ageFrom(birthDate);
+  const ready = !!ap && !!lat && nik.length === 16 && !!fullName.trim() && age !== null;
 
   async function submit() {
     setError(null);
-    if (!ready) return;
+    if (!ready || !ap || !lat) return;
     setBusy(true);
     try {
+      const [apUrl, latUrl] = await Promise.all([toDataUrl(ap), toDataUrl(lat)]);
       const c = await api.createCase({
         nik: nik.trim(),
         full_name: fullName.trim(),
-        age: Number(age),
+        birth_date: birthDate,
         sex,
         side,
+        images: [
+          { projection: 'AP', filename: ap.name, mime: ap.type || null, data_url: apUrl },
+          { projection: 'LAT', filename: lat.name, mime: lat.type || null, data_url: latUrl },
+        ],
       });
       navigate(`/cases/${encodeURIComponent(c.id)}/reconstruction`);
     } catch (e) {
@@ -149,18 +198,9 @@ export function Upload() {
 
           <aside className="flex flex-col gap-4">
             <div className="rounded-card border border-ink-200 bg-white p-5 shadow-card">
-              <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Metadata kasus</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Identitas pasien</h2>
 
               <div className="mt-4 flex flex-col gap-4">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-ink-700">ID pasien</span>
-                  <input
-                    readOnly
-                    value="Dibuat otomatis saat diproses"
-                    className="w-full cursor-not-allowed rounded-md border border-ink-200 bg-ink-50 px-3 py-2.5 text-sm text-ink-500"
-                  />
-                </label>
-
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold text-ink-700">NIK</span>
                   <input
@@ -185,11 +225,12 @@ export function Upload() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-ink-700">Usia</span>
+                    <span className="text-xs font-semibold text-ink-700">Tanggal lahir</span>
                     <input
-                      value={age}
-                      inputMode="numeric"
-                      onChange={(e) => setAge(e.target.value.replace(/[^0-9]/g, ''))}
+                      type="date"
+                      value={birthDate}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setBirthDate(e.target.value)}
                       className="w-full rounded-md border border-ink-300 bg-white px-3 py-2.5 text-sm text-ink-900 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </label>
@@ -206,24 +247,25 @@ export function Upload() {
                   </label>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-ink-700">Sisi lutut</span>
-                  <div className="grid grid-cols-2 gap-1 rounded-lg border border-ink-200 bg-ink-50 p-1">
-                    {(['Kanan', 'Kiri'] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSide(s)}
-                        className={clsx(
-                          'rounded-md py-2 text-sm font-semibold transition-colors',
-                          side === s ? 'bg-white text-accent shadow-sm' : 'text-ink-500 hover:text-ink-700',
-                        )}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              </div>
+            </div>
+
+            <div className="rounded-card border border-ink-200 bg-white p-5 shadow-card">
+              <h2 className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Sisi lutut</h2>
+              <div className="mt-4 grid grid-cols-2 gap-1 rounded-lg border border-ink-200 bg-ink-50 p-1">
+                {(['Kanan', 'Kiri'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSide(s)}
+                    className={clsx(
+                      'rounded-md py-2 text-sm font-semibold transition-colors',
+                      side === s ? 'bg-white text-accent shadow-sm' : 'text-ink-500 hover:text-ink-700',
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
 

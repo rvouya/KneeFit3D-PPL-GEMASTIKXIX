@@ -1,6 +1,24 @@
+/**
+ * Fasad data aplikasi. Mode standalone: tidak ada backend — setiap metode
+ * dilayani `./db` (IndexedDB di browser). Bentuk tipe dan pesan galat sengaja
+ * dipertahankan sama seperti versi HTTP supaya halaman tidak perlu diubah
+ * kalau nanti backend dinyalakan lagi.
+ */
 import type { CaseStatus } from '../components/ui/StatusBadge';
+import * as db from './db';
 
-export type CaseFile = { kind: 'nifti' | 'stl'; filename: string; meta: string };
+/** Alias supaya `./db` tidak perlu ikut mengimpor komponen UI. */
+export type CaseStatusLike = CaseStatus;
+
+export type CaseFile = { kind: 'nifti' | 'stl'; filename: string; meta: string; url: string | null };
+
+/** Citra X-ray input; `data_url` kosong bila berkas DICOM (tidak bisa dirender browser). */
+export type CaseImage = {
+  projection: 'AP' | 'LAT';
+  filename: string;
+  mime: string | null;
+  data_url: string | null;
+};
 
 export type ApiCase = {
   id: string;
@@ -8,6 +26,7 @@ export type ApiCase = {
   age: number;
   nik: string | null;
   full_name: string | null;
+  birth_date: string | null;
   side: 'Kanan' | 'Kiri';
   status: CaseStatus;
   progress_stage: string | null;
@@ -15,6 +34,9 @@ export type ApiCase = {
   note: string | null;
   uploaded_at: string;
   files?: CaseFile[];
+  images?: CaseImage[];
+  /** Snapshot kanvas 3D (data URL) yang disimpan saat konfirmasi ukuran. */
+  snapshot?: string | null;
 };
 
 export type CaseList = {
@@ -29,44 +51,46 @@ export type CaseAction = 'cancel' | 'review' | 'reset' | 'process' | 'finish';
 export type NewCase = {
   nik: string;
   full_name: string;
-  age: number;
+  /** ISO YYYY-MM-DD; usia dihitung server dari nilai ini. */
+  birth_date: string;
   sex: 'P' | 'L';
   side: 'Kanan' | 'Kiri';
+  /** Citra X-ray AP + Lateral yang diunggah; disimpan untuk laporan. */
+  images?: { projection: 'AP' | 'LAT'; filename: string; mime: string | null; data_url: string | null }[];
 };
 
-async function unwrap(r: Response) {
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body?.error || `HTTP ${r.status}`);
-  return body;
-}
+export type FittingCandidate = {
+  size: string; score: number; note: string; recommended: boolean;
+  /** Kode katalog implan GCK4 untuk ukuran ini, mis. "M1". */
+  implant_code?: string;
+};
+export type FittingMetric = {
+  size: string; ssim: string | number; psnr: string | number;
+  dice: string | number; rmse: string | number; fit_score: number;
+};
+export type Fitting = { candidates: FittingCandidate[]; metrics: FittingMetric[] };
 
 export const api = {
-  login: (email: string, password: string): Promise<User> =>
-    fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    }).then(unwrap),
+  login: (email: string, password: string): Promise<User> => db.login(email, password),
 
-  listCases: (opts: { status?: string; q?: string } = {}): Promise<CaseList> => {
-    const p = new URLSearchParams();
-    if (opts.status && opts.status !== 'all') p.set('status', opts.status);
-    if (opts.q) p.set('q', opts.q);
-    return fetch(`/api/cases?${p.toString()}`).then(unwrap);
-  },
+  listCases: (opts: { status?: string; q?: string } = {}): Promise<CaseList> =>
+    db.listCases(opts) as Promise<CaseList>,
 
-  getCase: (code: string): Promise<ApiCase> =>
-    fetch(`/api/cases/${encodeURIComponent(code)}`).then(unwrap),
+  getCase: (code: string): Promise<ApiCase> => db.getCase(code),
 
-  createCase: (payload: NewCase): Promise<ApiCase> =>
-    fetch('/api/cases', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).then(unwrap),
+  getFitting: (code: string): Promise<Fitting> => db.getFitting(code),
 
-  action: (code: string, action: CaseAction): Promise<ApiCase> =>
-    fetch(`/api/cases/${encodeURIComponent(code)}/${action}`, { method: 'POST' }).then(unwrap),
+  createCase: (payload: NewCase): Promise<ApiCase> => db.createCase(payload),
+
+  saveSnapshot: (code: string, snapshot: string): Promise<{ ok: true }> =>
+    db.saveSnapshot(code, snapshot),
+
+  action: (code: string, action: CaseAction): Promise<ApiCase> => db.applyAction(code, action),
+
+  /** Cadangan lokal — data hanya ada di browser ini, tidak ada server. */
+  exportBackup: (): Promise<string> => db.exportBackup(),
+  importBackup: (json: string): Promise<number> => db.importBackup(json),
+  resetAll: (): Promise<void> => db.resetAll(),
 };
 
 /** Relative Indonesian timestamp: "Hari ini 09:41" / "Kemarin 15:44" / date. */

@@ -5,16 +5,40 @@ import { Button } from '../components/ui/Button';
 import { MetricCard } from '../components/ui/MetricCard';
 import { api, formatUploaded, type ApiCase } from '../lib/api';
 
-function XrayThumb({ label }: { label: string }) {
+/** Citra X-ray asli bila tersedia; DICOM/berkas hilang jatuh ke placeholder. */
+function XrayThumb({ label, src, caption }: { label: string; src?: string | null; caption?: string }) {
   return (
-    <div className="relative aspect-[4/5] overflow-hidden rounded-lg border border-ink-200">
-      <div className="absolute inset-0 bg-gradient-to-b from-[#111826] to-[#1f2a3d]" />
-      <div className="absolute inset-0 opacity-70 [background:radial-gradient(60%_70%_at_50%_45%,rgba(226,232,240,0.35),transparent_70%)]" />
+    <div className="relative aspect-[4/5] overflow-hidden rounded-lg border border-ink-200 bg-[#111826]">
+      {src ? (
+        <img src={src} alt={`X-ray ${label}`} className="h-full w-full object-contain" />
+      ) : (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#111826] to-[#1f2a3d]" />
+          <div className="absolute inset-0 opacity-70 [background:radial-gradient(60%_70%_at_50%_45%,rgba(226,232,240,0.35),transparent_70%)]" />
+          {caption && (
+            <span className="absolute inset-x-2 bottom-2 text-center font-mono text-[10px] text-white/70">
+              {caption}
+            </span>
+          )}
+        </>
+      )}
       <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white/80">
         {label}
       </span>
     </div>
   );
+}
+
+const SEX_LABEL: Record<string, string> = { P: 'Perempuan', L: 'Laki-laki' };
+
+/** `1958-01-01` → `01 Januari 1958`; UTC supaya tanggalnya tidak bergeser. */
+function formatBirthDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('id-ID', {
+    day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC',
+  });
 }
 
 /** Halaman laporan (exportable PDF) — layar ke-5 CONTEXT. */
@@ -28,6 +52,9 @@ export function Report() {
   useEffect(() => {
     api.getCase(caseId).then(setC).catch((e) => setError((e as Error).message));
   }, [caseId]);
+
+  const ap = c?.images?.find((i) => i.projection === 'AP');
+  const lat = c?.images?.find((i) => i.projection === 'LAT');
 
   return (
     <div className="min-h-screen bg-ink-50">
@@ -88,7 +115,10 @@ export function Report() {
         <section className="grid grid-cols-2 gap-x-8 gap-y-3 py-6 text-sm sm:grid-cols-4">
           {[
             ['ID Kasus', caseId],
-            ['Pasien (de-id)', c ? `${c.sex} · ${c.age} th` : '—'],
+            ['Nama pasien', c?.full_name || '—'],
+            ['NIK', c?.nik || '—'],
+            ['Tanggal lahir', formatBirthDate(c?.birth_date)],
+            ['Kelamin · usia', c ? `${SEX_LABEL[c.sex] ?? c.sex} · ${c.age} th` : '—'],
             ['Sisi lutut', c?.side ?? '—'],
             ['Tanggal', c ? formatUploaded(c.uploaded_at) : '—'],
             ['Dokter', 'dr. Adi Wibowo'],
@@ -105,12 +135,12 @@ export function Report() {
           <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Citra input</h2>
           <div className="grid max-w-md grid-cols-2 gap-4">
             <div>
-              <XrayThumb label="AP" />
-              <p className="mt-1 text-center text-xs text-ink-500">X-ray AP</p>
+              <XrayThumb label="AP" src={ap?.data_url} caption={ap ? 'DICOM · pratinjau tidak tersedia' : undefined} />
+              <p className="mt-1 truncate text-center text-xs text-ink-500">{ap?.filename ?? 'X-ray AP'}</p>
             </div>
             <div>
-              <XrayThumb label="LAT" />
-              <p className="mt-1 text-center text-xs text-ink-500">X-ray Lateral</p>
+              <XrayThumb label="LAT" src={lat?.data_url} caption={lat ? 'DICOM · pratinjau tidak tersedia' : undefined} />
+              <p className="mt-1 truncate text-center text-xs text-ink-500">{lat?.filename ?? 'X-ray Lateral'}</p>
             </div>
           </div>
         </section>
@@ -118,16 +148,32 @@ export function Report() {
         <section className="grid gap-6 border-t border-ink-100 py-6 sm:grid-cols-2">
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Snapshot rekonstruksi 3D</h2>
-            <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-[#8ba0c8]">
-              <div className="absolute inset-0 [background:radial-gradient(50%_60%_at_50%_45%,rgba(231,216,168,0.9),transparent_65%)]" />
-              <span className="absolute bottom-2 left-2 font-mono text-[10px] text-white/80">confidence 0.94</span>
+            <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-[#17243c]">
+              {c?.snapshot ? (
+                <img
+                  src={c.snapshot}
+                  alt="Snapshot rekonstruksi 3D dengan implan"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-[#8ba0c8]" />
+                  <div className="absolute inset-0 [background:radial-gradient(50%_60%_at_50%_45%,rgba(231,216,168,0.9),transparent_65%)]" />
+                  <span className="absolute inset-x-2 bottom-6 text-center font-mono text-[10px] text-white/80">
+                    snapshot tersimpan saat konfirmasi ukuran
+                  </span>
+                </>
+              )}
+              <span className="absolute bottom-2 left-2 rounded bg-black/40 px-1.5 py-0.5 font-mono text-[10px] text-white/80">
+                confidence 0.94
+              </span>
             </div>
           </div>
           <div>
             <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Rekomendasi implan final</h2>
             <div className="rounded-card bg-[#1e5cd4] p-5 text-white">
-              <div className="text-[26px] font-bold leading-8">Femur B · Tibia B</div>
-              <div className="mt-1 text-sm text-[#eff6ff]">GenuFlex CR · Fit score 92 · confidence tinggi</div>
+              <div className="text-[26px] font-bold leading-8">Femur M1 · Tibia M1</div>
+              <div className="mt-1 text-sm text-[#eff6ff]">GCK4 M1 · ukuran M · fit score 92 · confidence tinggi</div>
             </div>
           </div>
         </section>
@@ -135,10 +181,10 @@ export function Report() {
         <section className="border-t border-ink-100 py-6">
           <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Implant Fit Scoring</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MetricCard label="RMSE global" value="0.82" unit="mm" />
-            <MetricCard label="Coverage tibia" value="96.9" unit="%" />
-            <MetricCard label="Max overhang" value="1.6" unit="mm" />
-            <MetricCard label="Risiko notching" value="Rendah" tone="accent" />
+            <MetricCard label="SSIM" value="0.88" tone="accent" />
+            <MetricCard label="PSNR" value="35.7" unit="dB" />
+            <MetricCard label="Dice" value="0.94" />
+            <MetricCard label="RMSE" value="0.82" unit="mm" />
           </div>
         </section>
 
@@ -146,7 +192,8 @@ export function Report() {
           <p className="rounded-lg bg-ink-100 px-4 py-3 text-xs leading-relaxed text-ink-500">
             Rekomendasi bersifat estimatif dan dihasilkan oleh model AI sebagai alat
             bantu keputusan. Keputusan akhir pemilihan implan tetap pada dokter yang
-            merawat. Laporan ini dihasilkan otomatis dari data ter-de-identifikasi.
+            merawat. Laporan ini memuat identitas pasien — perlakukan sebagai dokumen
+            rekam medis dan batasi peredarannya.
           </p>
           <div className="mt-8 flex justify-between text-sm">
             <div>

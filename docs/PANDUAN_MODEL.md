@@ -45,11 +45,12 @@ Semua tipe ada di `ml/schemas.py`. Ringkasnya:
 
 **3. `size_implant(req)`**
 - IN : `req.case_code`, `req.landmarks`
-- OUT: `SizingResult(candidates[ImplantCandidate(size, score, note, recommended)], recommended_size)`
+- OUT: `SizingResult(candidates[ImplantCandidate(size, implant_code, score, note, recommended)], recommended_size)`
+- `size` = `S` / `M` / `L` / `XL`; `implant_code` = kode katalog GCK4 (`S1`, `M1`, `L1`, `XL1`)
 
 **4. `virtual_fit(req)`**
 - IN : `req.case_code`, `req.femur_stl`, `req.tibia_stl`, `req.size`
-- OUT: `FitMetrics(size, rmse, coverage_tibia, max_overhang, notching_risk, fit_score)`
+- OUT: `FitMetrics(size, ssim, psnr, dice, rmse, fit_score)` — SSIM/Dice 0..1, PSNR dB, RMSE mm
 
 ## 3. Langkah integrasi
 

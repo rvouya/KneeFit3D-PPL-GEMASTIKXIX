@@ -66,7 +66,7 @@ Tombol pada baris worklist berubah otomatis mengikuti status kasus
 4. **Rekonstruksi 3D** (`/cases/:id/reconstruction`) → viewer 3D interaktif
    (rotasi/zoom/pan), unduh volume/mesh, **Lanjut ke virtual fitting**.
 5. **Virtual Fitting** (`/cases/:id/fitting`) → kandidat ukuran + Implant Fit
-   Scoring (RMSE, coverage, overhang, notching). **Konfirmasi Ukuran** →
+   Scoring (SSIM, PSNR, Dice, RMSE). **Konfirmasi Ukuran** →
    `POST /api/cases/:id/review` → status `reviewed` → kembali ke worklist.
 
 ## Endpoint API

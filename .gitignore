@@ -1,12 +1,23 @@
 # deps
 node_modules/
-server/node_modules/
+
+# backend + ML service — dipakai lagi nanti, sementara app jalan standalone.
+# Berkas tetap ada di disk; versi terakhir yang ter-commit ada di commit 2415914.
+server/
+ml/
 
 # build output
 dist/
+gh-pages/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# aset sumber — mesh yang dipakai sudah disalin ke public/models/
+# `/data/` pakai garis miring depan: tanpa itu `src/data/` ikut terabaikan.
+/GCK4_Web_Models/
+/GCK4_Web_Models.zip
+/data/
 
 # secrets & env
 .env
@@ -14,14 +25,17 @@ vite.config.d.ts
 server/.env
 *.local
 
-# python / ML
+# python
 __pycache__/
 *.pyc
 .venv/
-ml/.venv/
-ml/models/*
-!ml/models/.gitkeep
 
 # misc
 .DS_Store
 .figma-ref/
+docs/superpowers/
+# unggahan/tangkapan layar sementara di root
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*.png
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*.jpg
+/WhatsApp Image *
+
