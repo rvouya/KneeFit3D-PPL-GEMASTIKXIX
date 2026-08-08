@@ -66,7 +66,7 @@ export function Report() {
             { label: caseId, muted: true },
           ]}
         />
-        <div className="mx-auto flex max-w-[860px] items-center justify-between px-6 pt-6">
+        <div className="mx-auto flex max-w-[860px] flex-wrap items-center gap-x-3 gap-y-2 px-6 pt-6">
           <button
             onClick={() => navigate('/worklist')}
             className="flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-800"
@@ -76,7 +76,23 @@ export function Report() {
             </svg>
             Kembali ke worklist
           </button>
-          <Button onClick={() => window.print()}>
+
+          {/* Laporan bukan jalan buntu — tahap sebelumnya tetap bisa dibuka lagi. */}
+          <span className="h-4 w-px bg-ink-300" aria-hidden />
+          <button
+            onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/reconstruction`)}
+            className="rounded-lg px-2 py-1 text-sm font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-800"
+          >
+            Rekonstruksi 3D
+          </button>
+          <button
+            onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/fitting`)}
+            className="rounded-lg px-2 py-1 text-sm font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-800"
+          >
+            Virtual Fitting
+          </button>
+
+          <Button className="ml-auto" onClick={() => window.print()}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
               <path d="M4 6V2.5h8V6M4 12H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1M4 10h8v3.5H4V10Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
