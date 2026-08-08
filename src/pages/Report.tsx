@@ -81,13 +81,13 @@ export function Report() {
           <span className="h-4 w-px bg-ink-300" aria-hidden />
           <button
             onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/reconstruction`)}
-            className="rounded-lg px-2 py-1 text-sm font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-800"
+            className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-200 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Rekonstruksi 3D
           </button>
           <button
             onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/fitting`)}
-            className="rounded-lg px-2 py-1 text-sm font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-800"
+            className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-200 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Virtual Fitting
           </button>
