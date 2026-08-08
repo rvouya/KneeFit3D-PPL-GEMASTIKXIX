@@ -22,7 +22,8 @@ function RowActions({ c, onDone }: { c: ApiCase; onDone: () => void }) {
   const btns = STATUS_BUTTONS[c.status as CaseStatus] ?? [];
 
   return (
-    <div className="flex items-center justify-end gap-2">
+    // klik tombol tidak boleh ikut memicu klik baris di belakangnya
+    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
       {btns.map((b) => {
         if (b.to) {
           return (
@@ -67,7 +68,13 @@ function RowActions({ c, onDone }: { c: ApiCase; onDone: () => void }) {
   );
 }
 
-/** Worklist / dashboard kasus — node 2:455, wired to PostgreSQL API. */
+/** Tujuan klik baris: kasus yang sudah ditinjau langsung ke laporan. */
+const rowTarget = (c: ApiCase) =>
+  c.status === 'reviewed'
+    ? `/cases/${encodeURIComponent(c.id)}/report`
+    : `/cases/${encodeURIComponent(c.id)}/reconstruction`;
+
+/** Worklist / dashboard kasus — node 2:455. */
 export function Worklist() {
   const navigate = useNavigate();
   const [active, setActive] = useState('all');
@@ -180,7 +187,7 @@ export function Worklist() {
               <p className="text-sm font-semibold text-status-error">Gagal memuat data</p>
               <p className="max-w-md text-xs text-ink-500">{error}</p>
               <p className="max-w-md text-xs text-ink-400">
-                Pastikan server API & PostgreSQL berjalan (lihat CARA_JALANKAN.md).
+                Data tersimpan di browser ini (IndexedDB). Coba muat ulang halaman.
               </p>
               <Button size="sm" variant="secondary" onClick={load} className="mt-2">
                 Coba lagi
@@ -218,10 +225,24 @@ export function Worklist() {
                       </tr>
                     ) : (
                       rows.map((c) => (
-                        <tr key={c.id} className="hover:bg-ink-50/60">
+                        <tr
+                          key={c.id}
+                          onClick={() => navigate(rowTarget(c))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              navigate(rowTarget(c));
+                            }
+                          }}
+                          tabIndex={0}
+                          role="link"
+                          aria-label={`Buka kasus ${c.id}`}
+                          className="cursor-pointer hover:bg-ink-50/60 focus:bg-ink-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                        >
                           <td className="px-5 py-4">
                             <Link
-                              to={`/cases/${encodeURIComponent(c.id)}/reconstruction`}
+                              to={rowTarget(c)}
+                              onClick={(e) => e.stopPropagation()}
                               className="text-sm font-semibold text-ink-900 hover:text-accent"
                             >
                               {c.id}

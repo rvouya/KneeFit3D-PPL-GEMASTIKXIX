@@ -46,7 +46,7 @@ export type CaseList = {
 
 export type User = { id: number; email: string; name: string; org: string };
 
-export type CaseAction = 'cancel' | 'review' | 'reset' | 'process' | 'finish';
+export type CaseAction = 'cancel' | 'review' | 'unreview' | 'reset' | 'process' | 'finish';
 
 export type NewCase = {
   nik: string;

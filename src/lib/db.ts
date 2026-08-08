@@ -118,6 +118,8 @@ const asDataUrl = (v: unknown): string | null =>
 const TRANSITIONS: Record<string, { from: string[]; to: CaseStatusLike }> = {
   cancel:  { from: ['queued', 'processing'], to: 'canceled' },
   review:  { from: ['ready'], to: 'reviewed' },
+  // batalkan konfirmasi ukuran: balik ke antrean tinjauan (snapshot tetap disimpan)
+  unreview: { from: ['reviewed'], to: 'ready' },
   reset:   { from: ['error', 'canceled'], to: 'queued' },
   process: { from: ['queued'], to: 'processing' },
   finish:  { from: ['processing'], to: 'ready' },

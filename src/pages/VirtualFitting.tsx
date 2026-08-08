@@ -66,6 +66,9 @@ export function VirtualFitting() {
     captureRef.current = fn;
   }, []);
 
+  const reviewed = c?.status === 'reviewed';
+  const reportPath = `/cases/${encodeURIComponent(caseId)}/report`;
+
   async function confirm() {
     setConfirming(true);
     try {
@@ -73,7 +76,19 @@ export function VirtualFitting() {
       const shot = captureRef.current?.() ?? null;
       if (shot) await api.saveSnapshot(caseId, shot).catch(() => {});
       await api.action(caseId, 'review');
-      navigate(`/cases/${encodeURIComponent(caseId)}/report`);
+      navigate(reportPath);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  /** Kembalikan kasus ke status "ready" supaya ukuran bisa dipilih ulang. */
+  async function undoConfirm() {
+    setConfirming(true);
+    try {
+      setC(await api.action(caseId, 'unreview'));
     } catch (e) {
       alert((e as Error).message);
     } finally {
@@ -187,16 +202,33 @@ export function VirtualFitting() {
           </div>
 
           <div className="space-y-3 px-6 pb-6">
-            <button
-              onClick={confirm}
-              disabled={confirming}
-              className="w-full rounded-lg bg-[#1e5cd4] py-3.5 font-bold text-white transition-colors hover:bg-accent-active disabled:opacity-60"
-            >
-              {confirming ? 'Menyimpan…' : `Konfirmasi Ukuran ${active.size} (${active.implantCode})`}
-            </button>
-            <button className="w-full rounded-lg border border-ink-200 bg-white py-3.5 font-semibold text-ink-900 transition-colors hover:bg-ink-50">
-              Bandingkan S / M / L / XL
-            </button>
+            {reviewed ? (
+              <>
+                {/* Ukuran sudah dikonfirmasi — jangan panggil aksi "review" lagi,
+                    transisi itu tidak sah dari status "reviewed". */}
+                <button
+                  onClick={() => navigate(reportPath)}
+                  className="w-full rounded-lg bg-[#1e5cd4] py-3.5 font-bold text-white transition-colors hover:bg-accent-active"
+                >
+                  Lihat Laporan
+                </button>
+                <button
+                  onClick={undoConfirm}
+                  disabled={confirming}
+                  className="w-full rounded-lg border border-ink-200 bg-white py-3.5 font-semibold text-ink-900 transition-colors hover:bg-ink-50 disabled:opacity-60"
+                >
+                  {confirming ? 'Membatalkan…' : 'Batalkan konfirmasi ukuran'}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={confirm}
+                disabled={confirming}
+                className="w-full rounded-lg bg-[#1e5cd4] py-3.5 font-bold text-white transition-colors hover:bg-accent-active disabled:opacity-60"
+              >
+                {confirming ? 'Menyimpan…' : `Konfirmasi Ukuran ${active.size} (${active.implantCode})`}
+              </button>
+            )}
           </div>
         </aside>
       </div>
