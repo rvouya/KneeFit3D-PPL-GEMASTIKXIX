@@ -1,10 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { Logo } from '../components/Logo';
 import { Button } from '../components/ui/Button';
 import { StatusBadge, type CaseStatus } from '../components/ui/StatusBadge';
 import { ProgressBar } from '../components/ui/ProgressBar';
+import { EditCaseDialog } from '../components/EditCaseDialog';
+import { UserMenu } from '../components/UserMenu';
 import { api, formatUploaded, type ApiCase, type CaseList } from '../lib/api';
 import { STATUS_BUTTONS } from '../lib/caseActions';
 
@@ -16,7 +19,93 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'reviewed', label: 'Reviewed' },
 ];
 
-function RowActions({ c, onDone }: { c: ApiCase; onDone: () => void }) {
+/** Konfirmasi hapus. Kasus di IndexedDB tidak punya recycle bin — sekali hapus, hilang. */
+function DeleteCaseDialog({
+  c,
+  onClose,
+  onDeleted,
+}: {
+  c: ApiCase;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function remove() {
+    setError(null);
+    setBusy(true);
+    try {
+      await api.deleteCase(c.id);
+      onDeleted();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Hapus kasus ${c.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[420px] rounded-card border border-ink-200 bg-white p-6 shadow-card"
+      >
+        <h2 className="text-lg font-bold text-ink-800">Hapus pasien ini?</h2>
+        <p className="mt-2 text-sm text-ink-600">
+          Kasus <span className="font-mono font-semibold text-ink-800">{c.id}</span>
+          {c.full_name ? ` · ${c.full_name}` : ''} akan dihapus beserta citra X-ray, snapshot 3D, dan
+          hasil fitting-nya.
+        </p>
+        <p className="mt-2 text-xs text-ink-500">
+          Data tersimpan di browser ini saja dan tidak bisa dikembalikan. Buat cadangan lebih dulu
+          bila masih diperlukan.
+        </p>
+
+        {error && (
+          <p className="mt-3 rounded-md border border-status-errorBg bg-status-errorBg/40 px-3 py-2 text-xs text-status-error">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Batal
+          </Button>
+          <Button variant="danger" onClick={remove} disabled={busy}>
+            {busy ? 'Menghapus…' : 'Hapus permanen'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RowActions({
+  c,
+  onDone,
+  onEdit,
+  onDelete,
+}: {
+  c: ApiCase;
+  onDone: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const btns = STATUS_BUTTONS[c.status as CaseStatus] ?? [];
@@ -64,7 +153,105 @@ function RowActions({ c, onDone }: { c: ApiCase; onDone: () => void }) {
           </button>
         );
       })}
+
+      {/* Edit & hapus dilipat ke menu supaya baris tidak penuh tombol. */}
+      <RowMenu c={c} onEdit={onEdit} onDelete={onDelete} />
     </div>
+  );
+}
+
+/** Menu "⋯" per baris: aksi yang jarang dipakai tidak perlu memakan lebar tabel. */
+function RowMenu({ c, onEdit, onDelete }: { c: ApiCase; onEdit: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const boxRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!boxRef.current?.contains(t) && !btnRef.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    // Posisi menu dibekukan saat dibuka, jadi scroll apa pun membuatnya basi.
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
+
+  function toggle() {
+    // Menu dipasang ke <body>: kartu worklist meng-clip overflow, jadi dropdown
+    // yang dirender di dalam baris akan terpotong.
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    setOpen((v) => !v);
+  }
+
+  const item =
+    'flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors';
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Aksi lain untuk kasus ${c.id}`}
+        className={clsx(
+          'grid h-8 w-8 place-items-center rounded-lg text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          open && 'bg-ink-100 text-ink-800',
+        )}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+          <circle cx="8" cy="3" r="1.4" />
+          <circle cx="8" cy="8" r="1.4" />
+          <circle cx="8" cy="13" r="1.4" />
+        </svg>
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={boxRef}
+          role="menu"
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed z-50 w-48 overflow-hidden rounded-card border border-ink-200 bg-white py-1 shadow-card"
+        >
+          <button
+            role="menuitem"
+            onClick={() => { setOpen(false); onEdit(); }}
+            className={clsx(item, 'text-ink-700 hover:bg-ink-50 hover:text-ink-900')}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M11.2 2.8a1.7 1.7 0 0 1 2.4 2.4L5.9 12.9l-3.1.8.8-3.1 7.6-7.8Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+            Edit data pasien
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => { setOpen(false); onDelete(); }}
+            className={clsx(item, 'text-status-error hover:bg-status-errorBg/40')}
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <path d="M2.8 4.2h10.4M6.4 4.2V2.9h3.2v1.3M4.2 4.2l.6 8.3a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.6-8.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Hapus pasien
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
@@ -82,6 +269,9 @@ export function Worklist() {
   const [data, setData] = useState<CaseList | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Dialog dipegang di level halaman supaya overlay-nya tidak terpotong <td>.
+  const [editing, setEditing] = useState<ApiCase | null>(null);
+  const [deleting, setDeleting] = useState<ApiCase | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -112,15 +302,7 @@ export function Worklist() {
           <div className="mx-1 h-5 w-px bg-ink-300" />
           <span className="text-sm font-semibold text-ink-800">Dashboard</span>
         </div>
-        <div className="flex items-center">
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-ink-800">dr. Adi Wibowo</span>
-            <span className="text-xs text-ink-500">RSUD Harapan Sehat</span>
-          </div>
-          <div className="ml-3 grid h-8 w-8 place-items-center rounded-full bg-ink-800 text-sm font-semibold text-white">
-            AW
-          </div>
-        </div>
+        <UserMenu />
       </header>
 
       <main className="mx-auto max-w-[1360px] p-6">
@@ -266,7 +448,14 @@ export function Worklist() {
                               </span>
                             ) : null}
                           </td>
-                          <td className="px-5 py-4"><RowActions c={c} onDone={load} /></td>
+                          <td className="px-5 py-4">
+                            <RowActions
+                              c={c}
+                              onDone={load}
+                              onEdit={() => setEditing(c)}
+                              onDelete={() => setDeleting(c)}
+                            />
+                          </td>
                         </tr>
                       ))
                     )}
@@ -292,6 +481,28 @@ export function Worklist() {
           )}
         </div>
       </main>
+
+      {editing && (
+        <EditCaseDialog
+          c={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
+
+      {deleting && (
+        <DeleteCaseDialog
+          c={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

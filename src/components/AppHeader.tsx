@@ -1,9 +1,15 @@
 import { Link } from 'react-router-dom';
 import { Logo } from './Logo';
+import { UserMenu } from './UserMenu';
 
 export type Crumb = { label: string; to?: string; muted?: boolean };
 
-/** Top navigation — node 2:305 (shared across inner pages). */
+/**
+ * Top navigation — node 2:305 (shared across inner pages).
+ *
+ * Mundur satu tahap lewat breadcrumb: tiap `Crumb` bertautan `to` jadi tombol
+ * back, jadi tidak perlu tombol terpisah di sebelah logo.
+ */
 export function AppHeader({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <header className="flex items-center justify-between border-b border-ink-200 bg-white px-6 py-3">
@@ -17,7 +23,10 @@ export function AppHeader({ crumbs }: { crumbs: Crumb[] }) {
             <span key={i} className="flex items-center gap-2">
               {i > 0 && <span className="text-ink-500">/</span>}
               {c.to ? (
-                <Link to={c.to} className="text-ink-500 hover:text-ink-700">
+                <Link
+                  to={c.to}
+                  className="rounded text-ink-500 underline-offset-4 hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
                   {c.label}
                 </Link>
               ) : (
@@ -34,15 +43,7 @@ export function AppHeader({ crumbs }: { crumbs: Crumb[] }) {
         </nav>
       </div>
 
-      <div className="flex items-center">
-        <div className="flex flex-col items-end">
-          <span className="text-sm font-semibold text-ink-800">dr. Adi Wibowo</span>
-          <span className="text-xs text-ink-500">RSUD Harapan Sehat</span>
-        </div>
-        <div className="ml-3 grid h-8 w-8 place-items-center rounded-full bg-ink-800 text-sm font-semibold text-white">
-          AW
-        </div>
-      </div>
+      <UserMenu />
     </header>
   );
 }

@@ -52,7 +52,16 @@ export function Reconstruction() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-50">
-      <AppHeader crumbs={[{ label: 'Output' }, { label: 'Rekonstruksi 3D' }, { label: caseId, muted: true }]} />
+      <AppHeader
+        // Urutan alur: worklist → input X-ray → rekonstruksi. "Input X-ray"
+        // tidak bertaut karena halaman unggah selalu membuat kasus baru.
+        crumbs={[
+          { label: 'Dashboard', to: '/worklist' },
+          { label: 'Input X-ray', muted: true },
+          { label: 'Rekonstruksi 3D' },
+          { label: caseId, muted: true },
+        ]}
+      />
 
       <div className="flex min-h-0 flex-1 gap-4 bg-[#f9fafb] p-4">
         <section className="relative min-w-0 flex-1 overflow-hidden rounded-card bg-[#8ba0c8] shadow-card">

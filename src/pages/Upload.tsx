@@ -4,27 +4,7 @@ import { clsx } from 'clsx';
 import { AppHeader } from '../components/AppHeader';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
-
-const ACCEPT = '.dcm,.png,.jpg,.jpeg';
-const okExt = (name: string) => /\.(dcm|png|jpe?g)$/i.test(name);
-
-/** DICOM tidak bisa dirender <img>, jadi hanya PNG/JPEG yang dijadikan data URL. */
-const renderable = (f: File) => /\.(png|jpe?g)$/i.test(f.name);
-
-function toDataUrl(f: File): Promise<string | null> {
-  if (!renderable(f)) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = () => resolve(typeof r.result === 'string' ? r.result : null);
-    r.onerror = () => resolve(null);
-    r.readAsDataURL(f);
-  });
-}
-
-function humanSize(bytes: number) {
-  if (bytes > 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
-}
+import { XRAY_ACCEPT, humanSize, kindLabel, okExt, renderable, toDataUrl } from '../lib/xray';
 
 function Slot({
   label,
@@ -82,7 +62,7 @@ function Slot({
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPT}
+          accept={XRAY_ACCEPT}
           className="hidden"
           onChange={(e) => pick(e.target.files?.[0])}
         />
@@ -101,8 +81,7 @@ function Slot({
             )}
             <div className="font-mono text-sm font-semibold text-ink-800">{file.name}</div>
             <div className="text-xs text-ink-500">
-              {/\.dcm$/i.test(file.name) ? 'DICOM' : /\.png$/i.test(file.name) ? 'PNG' : 'JPEG'} ·{' '}
-              {humanSize(file.size)}
+              {kindLabel(file.name)} · {humanSize(file.size)}
             </div>
             <span className="rounded-full bg-good/10 px-2 py-0.5 text-[11px] font-medium text-good">✓ valid</span>
           </div>

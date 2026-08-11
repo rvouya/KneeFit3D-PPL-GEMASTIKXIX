@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { api } from '../lib/api';
+import { setSession } from '../lib/session';
+import { DEMO_USER } from '../data/registry';
 import xrayBg from '../assets/xray-bg.png';
 
 function Check() {
@@ -45,7 +47,7 @@ export function Login() {
     setError(null);
     try {
       const user = await api.login(email, password);
-      sessionStorage.setItem('kf_user', JSON.stringify(user));
+      setSession(user);
       navigate('/worklist');
     } catch (err) {
       setError((err as Error).message);
@@ -159,7 +161,19 @@ export function Login() {
                 <div className="h-px flex-1 bg-ink-200" />
               </div>
 
-              <Button type="button" variant="secondary" size="lg" className="w-full font-medium" onClick={() => navigate('/worklist')}>
+              {/* SSO demo: tidak ada IdP, tapi tetap harus membuat sesi —
+                  kalau tidak, penjaga rute langsung memantulkan balik ke sini. */}
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="w-full font-medium"
+                onClick={() => {
+                  const { id, email: e, name, org } = DEMO_USER;
+                  setSession({ id, email: e, name, org });
+                  navigate('/worklist');
+                }}
+              >
                 Masuk dengan SSO rumah sakit
               </Button>
             </div>

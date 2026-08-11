@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AppHeader } from '../components/AppHeader';
 import { Button } from '../components/ui/Button';
 import { MetricCard } from '../components/ui/MetricCard';
-import { api, formatUploaded, type ApiCase } from '../lib/api';
+import { api, formatUploaded, type ApiCase, type CaseImage } from '../lib/api';
 
 /** Citra X-ray asli bila tersedia; DICOM/berkas hilang jatuh ke placeholder. */
 function XrayThumb({ label, src, caption }: { label: string; src?: string | null; caption?: string }) {
@@ -27,6 +27,15 @@ function XrayThumb({ label, src, caption }: { label: string; src?: string | null
       </span>
     </div>
   );
+}
+
+/**
+ * Keterangan untuk petak tanpa gambar. Hanya DICOM yang memang tidak bisa
+ * dirender; slot yang belum diisi jangan diaku-aku sebagai DICOM.
+ */
+function noPreviewNote(img?: CaseImage): string | undefined {
+  if (!img) return undefined;
+  return /\.dcm$/i.test(img.filename) ? 'DICOM · pratinjau tidak tersedia' : 'belum ada citra';
 }
 
 const SEX_LABEL: Record<string, string> = { P: 'Perempuan', L: 'Laki-laki' };
@@ -60,8 +69,13 @@ export function Report() {
     <div className="min-h-screen bg-ink-50">
       <div className="print:hidden">
         <AppHeader
+          // Laporan bukan jalan buntu: tiap tahap sebelumnya bisa dibuka lagi
+          // lewat breadcrumb.
           crumbs={[
-            { label: 'Output' },
+            { label: 'Dashboard', to: '/worklist' },
+            { label: 'Input X-ray', muted: true },
+            { label: 'Rekonstruksi 3D', to: `/cases/${encodeURIComponent(caseId)}/reconstruction` },
+            { label: 'Virtual Fitting', to: `/cases/${encodeURIComponent(caseId)}/fitting` },
             { label: 'Laporan' },
             { label: caseId, muted: true },
           ]}
@@ -75,21 +89,6 @@ export function Report() {
               <path d="m10 4-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Kembali ke worklist
-          </button>
-
-          {/* Laporan bukan jalan buntu — tahap sebelumnya tetap bisa dibuka lagi. */}
-          <span className="h-4 w-px bg-ink-300" aria-hidden />
-          <button
-            onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/reconstruction`)}
-            className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-200 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            Rekonstruksi 3D
-          </button>
-          <button
-            onClick={() => navigate(`/cases/${encodeURIComponent(caseId)}/fitting`)}
-            className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-200 hover:text-ink-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            Virtual Fitting
           </button>
 
           <Button className="ml-auto" onClick={() => window.print()}>
@@ -151,11 +150,11 @@ export function Report() {
           <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-ink-500">Citra input</h2>
           <div className="grid max-w-md grid-cols-2 gap-4">
             <div>
-              <XrayThumb label="AP" src={ap?.data_url} caption={ap ? 'DICOM · pratinjau tidak tersedia' : undefined} />
+              <XrayThumb label="AP" src={ap?.data_url} caption={noPreviewNote(ap)} />
               <p className="mt-1 truncate text-center text-xs text-ink-500">{ap?.filename ?? 'X-ray AP'}</p>
             </div>
             <div>
-              <XrayThumb label="LAT" src={lat?.data_url} caption={lat ? 'DICOM · pratinjau tidak tersedia' : undefined} />
+              <XrayThumb label="LAT" src={lat?.data_url} caption={noPreviewNote(lat)} />
               <p className="mt-1 truncate text-center text-xs text-ink-500">{lat?.filename ?? 'X-ray Lateral'}</p>
             </div>
           </div>

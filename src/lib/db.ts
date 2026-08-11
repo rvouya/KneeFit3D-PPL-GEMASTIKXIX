@@ -12,7 +12,7 @@
  */
 
 import type {
-  ApiCase, CaseFile, CaseImage, CaseStatusLike,
+  ApiCase, CaseFile, CaseImage, CasePatch, CaseStatusLike,
   FittingCandidate, FittingMetric, NewCase, User,
 } from './api';
 import { DEMO_USER, meshFor } from '../data/registry';
@@ -239,13 +239,16 @@ export async function getFitting(code: string) {
   };
 }
 
-export async function createCase(payload: NewCase): Promise<ApiCase> {
-  await ensureSeeded();
+/**
+ * Validasi identitas pasien; dipakai bersama oleh `createCase` dan `updateCase`
+ * supaya aturan yang berlaku saat kasus dibuat tetap berlaku saat diedit.
+ */
+function normalizeIdentity(payload: CasePatch) {
   const nik = String(payload?.nik ?? '').trim();
   const fullName = String(payload?.full_name ?? '').trim();
   const birth = String(payload?.birth_date ?? '').trim();
   const age = /^\d{4}-\d{2}-\d{2}$/.test(birth) ? ageFromBirthDate(birth) : NaN;
-  const { sex, side } = payload ?? ({} as NewCase);
+  const { sex, side } = payload ?? ({} as CasePatch);
 
   if (!/^\d{16}$/.test(nik) || !fullName) {
     throw new Error('NIK harus 16 digit dan nama lengkap wajib diisi.');
@@ -253,6 +256,30 @@ export async function createCase(payload: NewCase): Promise<ApiCase> {
   if (!['P', 'L'].includes(sex) || !['Kanan', 'Kiri'].includes(side) || !Number.isFinite(age) || age <= 0 || age >= 130) {
     throw new Error('Data pasien tidak lengkap / tidak valid (tanggal lahir, kelamin, sisi).');
   }
+
+  return { nik, fullName, birth, age, sex, side };
+}
+
+/**
+ * Bersihkan citra X-ray yang masuk dari halaman unggah / dialog edit.
+ * Maksimal dua (AP + Lateral); `data_url` yang bukan gambar dibuang jadi null
+ * supaya berkas DICOM tetap tercatat namanya tanpa pratinjau.
+ */
+function normalizeImages(images: NewCase['images']): CaseImage[] {
+  return (Array.isArray(images) ? images.slice(0, 2) : []).map((img): CaseImage => {
+    const projection = img?.projection === 'LAT' ? 'LAT' : 'AP';
+    return {
+      projection,
+      filename: String(img?.filename ?? `${projection.toLowerCase()}.png`).slice(0, 200),
+      mime: String(img?.mime ?? '').slice(0, 100) || null,
+      data_url: asDataUrl(img?.data_url),
+    };
+  });
+}
+
+export async function createCase(payload: NewCase): Promise<ApiCase> {
+  await ensureSeeded();
+  const { nik, fullName, birth, age, sex, side } = normalizeIdentity(payload);
 
   const all = await allCases();
   const code = nextCaseCode(all);
@@ -280,15 +307,7 @@ export async function createCase(payload: NewCase): Promise<ApiCase> {
       { kind: 'stl', filename: rec.tibia_stl, meta: 'tibia + fibula · 48k triangle · 2.3 MB', url: mesh.tibia_url },
     ],
     // citra X-ray yang diunggah operator disimpan apa adanya untuk laporan
-    images: (Array.isArray(payload.images) ? payload.images.slice(0, 2) : []).map((img): CaseImage => {
-      const projection = img?.projection === 'LAT' ? 'LAT' : 'AP';
-      return {
-        projection,
-        filename: String(img?.filename ?? `${projection.toLowerCase()}.png`).slice(0, 200),
-        mime: String(img?.mime ?? '').slice(0, 100) || null,
-        data_url: asDataUrl(img?.data_url),
-      };
-    }),
+    images: normalizeImages(payload.images),
     snapshot: null,
     candidates: p.sizing.candidates,
     metrics: p.fitting,
@@ -297,6 +316,51 @@ export async function createCase(payload: NewCase): Promise<ApiCase> {
 
   await writeCases([record]);
   return toApiCase(record);
+}
+
+/**
+ * Perbarui identitas pasien dan, bila dikirim, citra X-ray-nya. `age` dan mesh
+ * STL ikut dihitung ulang karena keduanya turunan dari identitas — kalau tidak,
+ * kasus bisa menampilkan usia lama atau mesh milik pasien registry yang sudah
+ * tidak cocok lagi.
+ */
+export async function updateCase(code: string, patch: CasePatch): Promise<ApiCase> {
+  const r = await readCase(code);
+  if (!r) throw new Error('Kasus tidak ditemukan.');
+  const { nik, fullName, birth, age, sex, side } = normalizeIdentity(patch);
+  const mesh = meshFor(nik, fullName, birth, sex);
+
+  const stlUrls = [mesh.femur_url, mesh.tibia_url];
+  let stlSeen = 0;
+  const next: CaseRecord = {
+    ...r,
+    nik,
+    full_name: fullName,
+    birth_date: birth,
+    age,
+    sex,
+    side,
+    // `images` tidak dikirim = operator tidak menyentuh citra; jangan dikosongkan.
+    images: patch.images === undefined ? r.images : normalizeImages(patch.images),
+    files: r.files.map((f) => (f.kind === 'stl' ? { ...f, url: stlUrls[stlSeen++] ?? f.url } : f)),
+  };
+  await writeCases([next]);
+  return toApiCase(next);
+}
+
+/** Hapus kasus beserta seluruh citra dan snapshot-nya. Tidak bisa dibatalkan. */
+export async function deleteCase(code: string): Promise<{ ok: true }> {
+  const r = await readCase(code);
+  if (!r) throw new Error('Kasus tidak ditemukan.');
+  const db = await openDB();
+  const tx = db.transaction(STORE, 'readwrite');
+  tx.objectStore(STORE).delete(code);
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('Gagal menghapus kasus.'));
+    tx.onabort = () => reject(tx.error ?? new Error('Transaksi IndexedDB dibatalkan.'));
+  });
+  return { ok: true };
 }
 
 export async function saveSnapshot(code: string, snapshot: string): Promise<{ ok: true }> {

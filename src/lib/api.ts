@@ -59,6 +59,12 @@ export type NewCase = {
   images?: { projection: 'AP' | 'LAT'; filename: string; mime: string | null; data_url: string | null }[];
 };
 
+/**
+ * Data kasus yang bisa disunting dari worklist: identitas + citra X-ray.
+ * `images` opsional — kalau tidak dikirim, citra lama dipertahankan apa adanya.
+ */
+export type CasePatch = NewCase;
+
 export type FittingCandidate = {
   size: string; score: number; note: string; recommended: boolean;
   /** Kode katalog implan GCK4 untuk ukuran ini, mis. "M1". */
@@ -81,6 +87,10 @@ export const api = {
   getFitting: (code: string): Promise<Fitting> => db.getFitting(code),
 
   createCase: (payload: NewCase): Promise<ApiCase> => db.createCase(payload),
+
+  updateCase: (code: string, patch: CasePatch): Promise<ApiCase> => db.updateCase(code, patch),
+
+  deleteCase: (code: string): Promise<{ ok: true }> => db.deleteCase(code),
 
   saveSnapshot: (code: string, snapshot: string): Promise<{ ok: true }> =>
     db.saveSnapshot(code, snapshot),

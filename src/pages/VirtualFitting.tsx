@@ -100,7 +100,9 @@ export function VirtualFitting() {
     <div className="flex h-screen flex-col overflow-hidden bg-ink-50">
       <AppHeader
         crumbs={[
-          { label: 'Output' },
+          { label: 'Dashboard', to: '/worklist' },
+          { label: 'Input X-ray', muted: true },
+          { label: 'Rekonstruksi 3D', to: `/cases/${encodeURIComponent(caseId)}/reconstruction` },
           { label: 'Virtual Fitting' },
           { label: caseId, muted: true },
         ]}
